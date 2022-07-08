@@ -1,0 +1,48 @@
+FROM centos:7  AS orig
+
+RUN yum -y install \
+      curl \
+      git \
+      make \
+      unzip \
+   && yum -y clean all \
+   && rm -rf /var/cache
+
+###############
+### AWS CLI ###
+###############
+ENV AWS_CLI_V2_VERSION=2.7.11
+
+###############
+## TERRAFORM ##
+###############
+## https://github.com/hashicorp/terraform/blob/main/CHANGELOG.md
+## https://www.terraform.io/downloads
+## https://releases.hashicorp.com/terraform/
+ENV TERRAFORM_VERSION=1.1.9 
+
+RUN curl -L \
+      -o "awscliv2.zip" \
+      "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-${AWS_CLI_V2_VERSION}.zip" \
+    && unzip -q awscliv2.zip \
+    && ./aws/install \
+    && rm -rf ./awscliv2.zip ./aws
+
+RUN curl -O https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip && \
+    unzip terraform_${TERRAFORM_VERSION}_linux_amd64.zip && \
+    mv terraform /usr/local/bin/ && \
+    rm terraform_${TERRAFORM_VERSION}_linux_amd64.zip
+
+## Clean up excess files
+RUN rm -rf /root/.pki
+
+############################
+### flatten Docker Image ###
+############################
+FROM scratch
+COPY --from=orig / /
+
+ARG BUILD_IMAGE_VERSION
+ENV BUILD_IMAGE_VERSION ${BUILD_IMAGE_VERSION}
+
+LABEL build.image.version=${BUILD_IMAGE_VERSION}

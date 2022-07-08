@@ -1,0 +1,71 @@
+FROM centos:7  AS orig
+
+RUN yum -y install \
+      curl \
+      git \
+      make \
+      unzip \
+   && yum -y clean all \
+   && rm -rf /var/cache
+
+###############
+### AWS CLI ###
+###############
+ENV AWS_CLI_V2_VERSION=2.7.11
+
+###############
+## TERRAFORM ##
+###############
+## https://github.com/hashicorp/terraform/blob/main/CHANGELOG.md
+## https://www.terraform.io/downloads
+## https://releases.hashicorp.com/terraform/
+ENV TERRAFORM_VERSION=1.1.9 
+
+RUN curl -L \
+      -o "awscliv2.zip" \
+      "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-${AWS_CLI_V2_VERSION}.zip" \
+    && unzip -q awscliv2.zip \
+    && ./aws/install \
+    && rm -rf ./awscliv2.zip ./aws
+
+RUN curl -O https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip && \
+    unzip terraform_${TERRAFORM_VERSION}_linux_amd64.zip && \
+    mv terraform /usr/local/bin/ && \
+    rm terraform_${TERRAFORM_VERSION}_linux_amd64.zip
+
+RUN mkdir -p /tmp/set1
+ADD ./terraformproviderrequirements_set1.tf /tmp/set1
+# RUN mkdir -p /usr/local/share/terraform/plugins
+RUN terraform -chdir=/tmp/set1 \
+		providers mirror \
+#			-platform=windows_amd64 \
+#			-platform=darwin_amd64 \
+			-platform=linux_amd64 \
+		/usr/local/share/terraform/plugins
+
+RUN mkdir -p /tmp/set2
+ADD ./terraformproviderrequirements_set2.tf /tmp/set2
+# RUN mkdir -p /usr/local/share/terraform/plugins
+RUN terraform -chdir=/tmp/set2 \
+		providers mirror \
+#			-platform=windows_amd64 \
+#			-platform=darwin_amd64 \
+			-platform=linux_amd64 \
+		/usr/local/share/terraform/plugins
+
+# Set Terraform config file
+ADD ./.terraformrc_Mirror_Set1 /root/.terraformrc
+      
+## Clean up excess files
+RUN rm -rf /root/.terraform.d /root/.pki /tmp/set1 /tmp/set2
+
+############################
+### flatten Docker Image ###
+############################
+FROM scratch
+COPY --from=orig / /
+
+ARG BUILD_IMAGE_VERSION
+ENV BUILD_IMAGE_VERSION ${BUILD_IMAGE_VERSION}
+
+LABEL build.image.version=${BUILD_IMAGE_VERSION}
