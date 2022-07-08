@@ -1,6 +1,13 @@
-# terraform-mirror-issue
+# terraform-mirror
 
-Demonstration of Terraform provider mirror issue
+Demonstration of Terraform provider mirror setup in a docker image, with support for multiple versions of individual providers.
+
+## Sections
+
+* Sample App
+* Build Images
+
+## Sample App
 
 ## Prerequisits
 
@@ -33,8 +40,8 @@ make destroy
 ```
 
 
-## Terraform Articales
+## Related Terraform Documentation
 
-https://www.terraform.io/cli/config/config-file#plugin_cache_dir
-https://www.terraform.io/cli/commands/init
-https://www.terraform.io/cli/commands/providers/mirror
+* https://www.terraform.io/cli/config/config-file
+* https://www.terraform.io/cli/commands/init
+* https://www.terraform.io/cli/commands/providers/mirror
