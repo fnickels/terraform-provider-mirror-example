@@ -4,16 +4,17 @@ Demonstration of Terraform provider mirror setup in a docker image, with support
 
 ## Sections
 
-* Sample App
-* Build Images
+* [Sample App](#sample-app)
+* [Build Images](#build-images)
+* [Related Terraform Documentation](#related-terraform-documentation)
 
 ## Sample App
 
-## Prerequisits
+### Prerequisits
 
 AWS Account & Credentials
 
-## Setup
+### Setup
 
 Create `secrets.env` file with commands to establish AWS credentials.  We use [keyconjurer](https://github.com/RiotGames/key-conjurer) so my `secrets.env` file looks like:
 
@@ -30,7 +31,7 @@ export TF_VAR_access_key=$AWS_ACCESS_KEY_ID
 export TF_VAR_secret_key=$AWS_SECRET_ACCESS_KEY
 ```
 
-## Issue Reproduction:
+### Reproduction:
 
 ```bash
 source secrets.env
@@ -38,6 +39,8 @@ make init
 make build
 make destroy
 ```
+
+## Build Images
 
 
 ## Related Terraform Documentation
