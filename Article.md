@@ -22,17 +22,21 @@ The following sections will walk you through setting up a simple test Terraform 
 To work through the example code we will be covering create the following directory structure in your home directory.
 
 From your shell run:
+
 ```
 mkdir -p ~/example/app
 mkdir -p ~/example/buildimage
 ```
+
 You will also need a somewhat recent version of both Docker and Terraform installed on your machine.
 
 To check what you have run:
+
 ```
 terraform --version
 docker --version
 ```
+
 It is ok if the version of Terraform installed on your machine is different from the version we will be installing in the build image. This is one of the benifits of using a build image to ensure consistency across mutple machines and developers.
 
 * [Docker install instructions](https://docs.docker.com/get-docker/)
@@ -40,7 +44,9 @@ It is ok if the version of Terraform installed on your machine is different from
 
 
 ## Simple Terraform Environment
+
 In the `~/example/app` directory create the following `main.tf` file:
+
 ```
 #see: https://www.terraform.io/language/providers/requirements
 
@@ -77,14 +83,18 @@ output mytest {
     value = local.test
 }
 ```
+
 This code simply prints out "Hello World!", but also requires the four specified providers to be imported when a `terraform init` command is run.
 
 From your shell run:
+
 ```
 cd ~/example/app
 terraform init
 ```
+
 The output should look something like this:
+
 ```
 $ terraform init
 
@@ -127,6 +137,7 @@ If you ever set or change modules or backend configuration for Terraform,
 rerun this command to reinitialize your working directory. If you forget, other
 commands will detect it and remind you to do so if necessary.
 ```
+
 The key thing to take note of here are the 4 lines that start with - Installed, each of these, list :
 * the provider name, 
 * the version installed, and 
@@ -143,6 +154,7 @@ At the time of this writing we got:
 Take note of these versions as we will be referring back to them later on when we pin our local mirror to different version.
 
 If you run the `terraform init` command a second time you should see:
+
 ```
 $ terraform init
 
@@ -177,10 +189,13 @@ Had a newer version of these four providers been released since last running the
 Lastly, lets take a look at how the apply command behaves in this configuration. 
 
 Run:
+
 ```
 terraform apply
 ```
+
 The output should look something like this:
+
 ```
 $ terraform apply
 Changes to Outputs:
@@ -195,11 +210,14 @@ Apply complete! Resources: 0 added, 0 changed, 0 destroyed.
 Outputs:
 mytest = "Hello World!"
 ```
+
 Clearly, the code does not do anything noteworthy and the providers we have defined do not impact the output in any fashion. As such, we will only be focusing on the effects on how theterraform init command behaves for the remainder of this article.
 
 
 ## Base Docker image
-Create a Dockerfile file in the ~/example/buildimage directory with the following contents:
+
+Create a `Dockerfile` file in the `~/example/buildimage` directory with the following contents:
+
 ```
 FROM centos:7 AS orig
 
@@ -249,16 +267,21 @@ ARG BUILD_IMAGE_VERSION
 ENV BUILD_IMAGE_VERSION ${BUILD_IMAGE_VERSION}
 LABEL build.image.version=${BUILD_IMAGE_VERSION}
 ```
+
 The above image preloads `git`, `make`, `unzip`, and `curl`. As well as pinned versions of `terraform` and the `aws` cli. You can add whatever tools you like for your build environment as needed.
 
-The Dockerfile expects one passed-in build arguement, `BUILD_IMAGE_VERSION`, this is the version number you are assigning to the build image. The value is exposed as both a label on the docker image and an evironment variable within the container.
+The `Dockerfile` expects one passed-in build arguement, `BUILD_IMAGE_VERSION`, this is the version number you are assigning to the build image. The value is exposed as both a label on the docker image and an evironment variable within the container.
 
 Additionally, We have flattened the image to have have the smallest image size possible. Build images in most environments are generally unique and do not lend themselves to the benifits of sharing image layers.
 
 
 ## Image Build
-With the above Dockerfile saved in the~/example/buildimage directory it is time to build the image.
-Run the following command from a shell
+
+With the above `Dockerfile` saved in the `~/example/buildimage` directory it is time to build the image.
+
+Run the following command from a shell:
+
+```
 cd ~/example/buildimage
 docker build \
    --progress plain \
@@ -266,8 +289,13 @@ docker build \
    --tag "base_buildimage:latest" \
    --build-arg BUILD_IMAGE_VERSION="1.0.0" \
    --file ./Dockerfile .
+```
+
 If the command is successful we can now attempt to use our new build image to initialize our example Terraform environment from within the build image.
+
 Run:
+
+```
 cd ~/example/
 docker run --rm -ti \
   --name "myBuildContainer" \
@@ -275,7 +303,11 @@ docker run --rm -ti \
   --workdir /root/src \
   "base_buildimage:1.0.0" \
   terraform -chdir=./app  init
+```
+
 You will likely get output that looks like this:
+
+```
 $ cd ~/example/
 $ docker run --rm -ti \
 >   --name "myBuildContainer" \
@@ -283,7 +315,9 @@ $ docker run --rm -ti \
 >   --workdir /root/src \
 >   "base_buildimage:1.0.0" \
 >   terraform -chdir=./app  init
+
 Initializing the backend...
+
 Initializing provider plugins...
 - Reusing previous version of hashicorp/cloudinit from the dependency lock file
 - Reusing previous version of hashicorp/external from the dependency lock file
@@ -295,18 +329,30 @@ Initializing provider plugins...
 - Using previously-installed hashicorp/null v3.1.1
 - Using previously-installed jfrog/artifactory v6.10.1
 - Using previously-installed hashicorp/aws v4.22.0
+
 Terraform has been successfully initialized!
+
 You may now begin working with Terraform. Try running "terraform plan" to see
 any changes that are required for your infrastructure. All Terraform commands
 should now work.
+
 If you ever set or change modules or backend configuration for Terraform,
 rerun this command to reinitialize your working directory. If you forget, other
 commands will detect it and remind you to do so if necessary.
+```
+
 If you did not run the initial terraform init command from earlier the output will look different.
+
 Run:
+```
 ls -la  ~/example/app
+```
+
 You will see the Terraform state and lock file as well as the .terraform directory.
+
 Clear all of these, and rerun the terraform init from within the build image:
+
+```
 rm -rf ~/example/app/.terraform \
    ~/example/app/.terraform.lock.hcl \
    ~/example/app/terraform.tfstate
@@ -318,8 +364,13 @@ docker run --rm -ti \
   --workdir /root/src \
   "base_buildimage:1.0.0" \
   terraform -chdir=./app  init
+```
+
 This time the output should look almost identical to the terraform init command we performed at the start of this article.
+
 Lastly, lets look at the tool versions within the build image:
+
+```
 cd ~/example/
 docker run --rm -ti \
   --name "myBuildContainer" \
@@ -327,7 +378,11 @@ docker run --rm -ti \
   --workdir /root/src \
   "base_buildimage:1.0.0" \
   bash
+```
+
 This should bring you to a bash shell in the container the prompt may look something like this:
+
+```
 $ docker run --rm -ti \
    --name "myBuildContainer" \
    --volume $(pwd):/root/src \
@@ -335,11 +390,19 @@ $ docker run --rm -ti \
    "base_buildimage:1.0.0" \
    bash
 [root@4a87daf18f42 src]#
+```
+
 To exit the bash shell simply type exit, but before doing that lets check a few things:
+
+```
 terraform --version 
 aws --version
 env | grep BUILD
+```
+
 The output will look like this:
+
+```
 [root@4a87daf18f42 src]# terraform --version
 Terraform v1.1.9
 on linux_amd64
@@ -350,32 +413,46 @@ aws-cli/2.7.11 Python/3.9.11 Linux/5.10.102.1-microsoft-standard-WSL2 exe/x86_64
 [root@4a87daf18f42 src]# env | grep BUILD
 BUILD_IMAGE_VERSION=1.0.0
 [root@4a87daf18f42 src]#
+```
+
 You shluld be able to match up the version of terraform and aws to the versions we defined in the Dockerfile. The environment variable define in the Dockerfile is also visable.
-What are not pinned are the Terraform Providers. These are still being pulled from the Internet and are floating to the most recent version at the time terraform init is executed. 
+
+What are not pinned are the Terraform Providers. These are still being pulled from the Internet and are floating to the most recent version at the time `terraform init` is executed. 
+
 Not super helpful ensuring consistency and reproducability.
+
 This can be easily remedied by changing the version assignments in the main.tf file from (>=) to (=), but the provider files will be downloaded from the Internet each time the terraform init command is run.
+
 If you want to read more about this see:
-Terraform Version Constraints
-Terraform Provider Requirements
+* [Terraform Version Constraints]()
+* [Terraform Provider Requirements]()
 
 In the next section, we will cover establishing a local file system mirror that provides a pinned subset of providers you can rely on being consistent from one build to the next.
 
 ---
 
-Completed Milestones
-Demonstrated Simple Terraform example using required providers and its interactions with the terraform init command.
-Constructed and Demonstrated a basic Docker Build Server Image
-Ran the same terraform init command from the Build Server Image and observed the same results.
+## Completed Milestones
+
+* Demonstrated Simple Terraform example using required providers and its interactions with the terraform init command.
+* Constructed and Demonstrated a basic Docker Build Server Image
+* Ran the same terraform init command from the Build Server Image and observed the same results.
 
 ---
 
-Adding a Terraform Provider Mirror 
+## Adding a Terraform Provider Mirror 
+
 Terraform has support for several different types of mirrors. There are nuanced differences between the various forms, to avoid going down too many rabbit holes I am going to limit the scope of this article to just a file system-based form using the default file locations and optional terraform configuration files.
-At the heart of this approach is the terraform provider mirror command, and the default Linux file system location for local providers (/usr/local/share/terraform/plugins).
+At the heart of this approach is the terraform provider mirror command, and the default Linux file system location for local providers (`/usr/local/share/terraform/plugins`).
+
 I would NOT recommend using the terraform provider mirror command on your local machine using the default directory, as once you set that, it is easy to forget that it is in place and several months later you may pull your hair out trying to figure out why you are not able to gain access to newer provider versions. But in a build image where you are actively pinning all of your resources to specific versions, this is an ideal use case.
-Define the pinned versions
-Create a setone.tf file in the ~/example/buildimage directory with the following contents:
+
+## Define the pinned versions
+
+Create a `setone.tf` file in the `~/example/buildimage` directory with the following contents:
+
+```
 #see: https://www.terraform.io/language/providers/requirements
+
 terraform {
   required_providers {
     aws = {
@@ -393,24 +470,43 @@ terraform {
     }
   }
 }
+```
+
 Note we are not using floating version definitions, but rather explicit versions. For example of floating version definition review our earlier file ~/example/app/main.tf, all of the definitions there are floating.
+
 If we had used floating version definitions (>=) the version loaded into the image would be the most recent version and could change each time the build image is built.
+
 This might be an acceptable approach for your use case, but just be aware of what you are doing. If following this approach I would recommend issuing a new version number for your build image each time it is built as you will likely not be aware of individual provider version changes. This should not be too big of a deal if you are saving your images in a registry as the hash from one build to the next if nothing actually changed will likely be the same.
+
 If you follow the approach of hard pinning of provider versions you can manually change your build image version when you make a change to the files defining your pinnings ( Dockerfile and setone.tf ).
-Revise the Dockerfile
+
+## Revise the Dockerfile
+
 Next, we need to add some commands to the Dockerfile. To keep track of what we have done so far we are going to make a copy of our current file and make changes to the new file:
+
 Do the following:
+
+```
 cd ~/example/buildimage
 cp Dockerfile Dockerfile_Mirror
+```
+
 Using your preferred editor open Dockerfile_Mirror.
+
 Replace the two lines in the file:
+
+```
 ## Clean up excess files
 RUN rm -rf /root/.pki
+```
+
 with the following lines:
+
+```
 RUN mkdir -p /tmp/setone
 ADD ./setone.tf /tmp/setone
 
-RUN terraform -chdir=/tmp/set1 \
+RUN terraform -chdir=/tmp/setone \
   providers mirror \
 #   -platform=windows_amd64 \
 #   -platform=darwin_amd64 \
@@ -419,6 +515,150 @@ RUN terraform -chdir=/tmp/set1 \
        
 ## Clean up excess files
 RUN rm -rf /root/.terraform.d /root/.pki /tmp/setone
+```
+
 Here is what we are doing and why:
-Create a temporary directory we can place our pinned requirements file into.
-Copy setone.tf into the directory
+* Create a temporary directory we can place our pinned requirements file into.
+* Copy `setone.tf` into the directory.
+* Run `terraform providers mirror` command in the temporary directory 
+  * Specify `/usr/local/share/terraform/plugins` as the target directory, which is the default location for local mirror files for Terraform on Linux.
+  * You could include other platforms (currently commented out), if your use case would require them.  But since the build image is based on Linux we are only selecting the Linux platform files.
+* Lastly we clean up unnecesary artifacts that are not needed in the build image.
+
+For more details on mirrors see [Terraform Provider Mirrors]()
+
+## Mirror Image Build
+
+Run the following command from a shell:
+
+```
+cd ~/example/buildimage
+docker build \
+   --progress plain \
+   --tag "mirror_buildimage:1.0.0" \
+   --tag "mirror_buildimage:latest" \
+   --build-arg BUILD_IMAGE_VERSION="1.0.0" \
+   --file ./Dockerfile_Mirror .
+```
+
+If the command is successful we can now attempt to use our new build image to initialize our example Terraform environment from within the build image.
+
+Run:
+
+```
+cd ~/example/
+docker run --rm -ti \
+  --name "myBuildContainer" \
+  --volume $(pwd):/root/src \
+  --workdir /root/src \
+  "mirror_buildimage:1.0.0" \
+  terraform -chdir=./app  init
+```
+
+note the version pulled in now
+
+---
+
+## Multiple versions
+
+The above is all well and good if everyone using your build image can live with just the single version of each provider, but what do you do when you want to test or use a different version of a provider for some of the environments you are building with this build image?
+
+The terraform provider mirror command will give yiou an error if you attempt to list the same provider twice.
+
+So the approach that will work is having multiple requirement files in different directories and running `terraform provider mirror` against each but target the same target directory.
+
+ 
+## Define a second (third, fourth, ...) pinned version file
+
+Create a `settwo.tf` file in the `~/example/buildimage` directory with the following contents:
+
+```
+#see: https://www.terraform.io/language/providers/requirements
+
+terraform {
+  required_providers {
+    aws = {
+      source  = "registry.terraform.io/hashicorp/aws"
+      version = "4.10.0"
+    }
+    cloudinit = {
+      source  = "registry.terraform.io/hashicorp/cloudinit"
+      version = "2.1.0"
+    }
+    # only in Set 2
+    null = {
+      source  = "registry.terraform.io/hashicorp/null"
+      version = "3.1.0"
+    }
+  }
+}
+```
+
+The list of providers does not have to match what is in the other provider requirement file.
+
+## Revise another Dockerfile
+
+Next, we need to add additional commands to the Dockerfile. We will copy the last DOckerfile into another new file.
+
+Do the following:
+
+```
+cd ~/example/buildimage
+cp Dockerfile_Mirror Dockerfile_MultiVer
+```
+
+Using your preferred editor open `Dockerfile_MultiVer`.
+
+Replace the two lines in the file:
+
+```
+## Clean up excess files
+RUN rm -rf /root/.terraform.d /root/.pki /tmp/setone
+```
+
+with the following lines:
+
+```
+RUN mkdir -p /tmp/settwo
+ADD ./settwo.tf /tmp/settwo
+
+RUN terraform -chdir=/tmp/settwo \
+  providers mirror \
+   -platform=linux_amd64 \
+  /usr/local/share/terraform/plugins
+       
+## Clean up excess files
+RUN rm -rf /root/.terraform.d /root/.pki /tmp/setone /tmp/settwo
+```
+
+## Multi Version Image Build
+
+Run the following command from a shell:
+
+```
+cd ~/example/buildimage
+docker build \
+   --progress plain \
+   --tag "multiver_buildimage:1.0.0" \
+   --tag "multiver_buildimage:latest" \
+   --build-arg BUILD_IMAGE_VERSION="1.0.0" \
+   --file ./Dockerfile_MultiVer .
+```
+
+If the command is successful we can now attempt to use our new build image to initialize our example Terraform environment from within the build image.
+
+Run:
+
+```
+cd ~/example/
+docker run --rm -ti \
+  --name "myBuildContainer" \
+  --volume $(pwd):/root/src \
+  --workdir /root/src \
+  "multiver_buildimage:1.0.0" \
+  terraform -chdir=./app init
+```
+
+note the versions now pulled in now
+
+---
