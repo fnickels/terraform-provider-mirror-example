@@ -1,3 +1,4 @@
+#see: https://www.terraform.io/language/providers/requirements
 terraform {
   required_providers {
     aws = {
