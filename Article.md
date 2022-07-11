@@ -422,9 +422,9 @@ BUILD_IMAGE_VERSION=1.0.0
 
 You should be able to match up the version of `terraform` and `aws` to the versions we pinned in the Dockerfile. The environment variable define in the Dockerfile is also visible.
 
-What are not pinned are the Terraform Providers. These are still being pulled from the Internet and are floating to the most recent version at the time `terraform init` command is executed. 
+What is not pinned are the Terraform Providers. These are still being pulled from the Internet and are floating to the most recent version at the time `terraform init` command is executed. 
 
-Not super helpful ensuring consistency and reproducibility.
+Not super helpful in ensuring consistency and reproducibility.
 
 This can be remedied by changing the version requirements in the `main.tf` file from (`>=`) to (`=`), but this will still leave the provider files being downloaded from the Internet each time the `terraform init` command is run.
 
