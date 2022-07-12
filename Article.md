@@ -646,7 +646,7 @@ The `jfrog/artifactory` & `hashicorp/null` are both still signed and are floatin
 
 * Successfully pinned Terraform Provider versions within a local mirror on our build image
 
-The above solution works great, but has one negative side effect, you can only declare a single provider version within the mirror.  This is not going to work well if you have different Terraform environments which have different version requirements.  Making unique build images for each set of versions is one solution, but not very practical. Populating multiple mirrors on your build image with different version is another approach, but could end up with redundant storage footprints.
+The above solution works great, but has one negative side effect, you can only declare a single provider version within the mirror.  This is not going to work well if you have different Terraform environments which have different version requirements.  Making unique build images for each set of Terraform versions is one solution, but not very practical. Populating multiple mirrors on your build image with different versions is another approach, but also not very practical as you will likely end up with redundant storage footprints and require extra steps to manage when a specific mirror is to be used.
 
 In the next section we will introduce how to have multiple provider versions within the same mirror.
 
@@ -654,19 +654,13 @@ In the next section we will introduce how to have multiple provider versions wit
 
 ## Multiple versions
 
-The above is all well and good if everyone using your build image can live with just the single version of each provider, but what do you do when you want to test or use a different version of a provider for some of the environments you are building with this build image?  Or god forbid you have multiple Terraform environments you want to build and they have differing requirements
+The initial mirror we setup in the previous section is well and good if everyone using the build image can live with just the single version of each Terraform provider, but providing flexibility to test and use different versions will rear its head at some point, especially if there is active development occurring.
 
+For active testing of provider versions you might want to have a second version of your build image that does not contain a mirror so that you can build and test with version from the public Internet before zeroing in on the version you want to use.  But lets put a pin in that idea for now, as later I will go over how to manage the use of the mirror with configuration files.
 
+To support multiple provider versions in a single mirror the trick is have multiple requirement files and run multiple `terraform providers mirror` commands pointing to the same mirror target directory.  The `terraform providers mirror` handles merging existing and newly declared version into a consolidated list within the mirror. In the following example we we setup a second requirement file and merge that with the previous mirror.
 
-A better non-obvious approach is to have multiple requirement files and run multiple `terraform providers mirror` commands pointing to the same mirror target directory.  The `terraform providers mirror` handles merging existing and newly declared version into a consolidated list within the mirror.
-
-
-The terraform provider mirror command will give yiou an error if you attempt to list the same provider twice.
-
-So the approach that will work is having multiple requirement files in different directories and running `terraform provider mirror` against each but target the same target directory.
-
-
-## Define a second (third, fourth, ...) pinned version file
+## Create a second (third, fourth, ...) provider definition file with new versions to be pinned
 
 Create a `settwo.tf` file in the `~/example/buildimage` directory with the following contents:
 
@@ -749,6 +743,13 @@ Run:
 
 ```
 cd ~/example/
+
+sudo rm -rf ./app/.terraform \
+       ./app/terraform.d \
+       ./app/terraform.tfstate \
+       ./app/.terraform.tfstate.lock.info \
+       ./app/.terraform.lock.hcl
+
 docker run --rm -ti \
   --name "myBuildContainer" \
   --volume $(pwd):/root/src \
@@ -757,6 +758,40 @@ docker run --rm -ti \
   terraform -chdir=./app init
 ```
 
-note the versions now pulled in now
+This time we get slightly different results:
+
+```
+Initializing provider plugins...
+- Finding jfrog/artifactory versions matching ">= 0.0.0"...
+- Finding hashicorp/aws versions matching ">= 4.0.0"...
+- Finding hashicorp/cloudinit versions matching ">= 2.0.0"...
+- Finding hashicorp/external versions matching ">= 0.0.0"...
+- Finding hashicorp/null versions matching ">= 0.0.0"...
+- Installing hashicorp/cloudinit v2.2.0...
+- Installed hashicorp/cloudinit v2.2.0 (unauthenticated)
+- Installing hashicorp/external v2.1.0...
+- Installed hashicorp/external v2.1.0 (unauthenticated)
+- Installing hashicorp/null v3.1.0...
+- Installed hashicorp/null v3.1.0 (unauthenticated)
+- Installing jfrog/artifactory v6.10.2...
+- Installed jfrog/artifactory v6.10.2 (signed by a HashiCorp partner, key ID 6B219DCCD7639232)
+- Installing hashicorp/aws v4.10.0...
+- Installed hashicorp/aws v4.10.0 (unauthenticated)
+```
+
+This time only the `jfrog/artifactory` provider is floating, because we added an older version of `hashicorp/null` to the second set.  `hashicorp/null` is also now showing up as **unauthenticated**, another clue to the fact the local mirror is controlling the versions that are available for this provider.  For `hashicorp/aws` you will now notice we are getting version v4.10.0 instead of v4.2.0 which we had declared in `setone.tf`.  For `hashicorp/cloudinit` we added v.2.1.0 in set two, but the more recent v.2.2.0 was in `setone.tf` and thus that one was selected.
 
 ---
+
+## Completed Milestone
+
+* Successfully added a second set of pinned Terraform Provider versions to the local mirror on our build image.
+
+In the next section we will explore how to use Terraform configuration files to modify how the mirror is used.
+
+---
+
+## Moidify Mirror behaviour with Terraform config file
+
+[Terraform Config](https://www.terraform.io/cli/config/config-file) files can be used to modify how a local mirror behaves.  A `.terraformrc` file located in the users home directory (on Linux systems), can contain configuration settings that alter the behavior of a local mirror.
+
