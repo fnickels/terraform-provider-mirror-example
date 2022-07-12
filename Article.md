@@ -358,17 +358,20 @@ From the file listing the Terraform state and lock files are visible as well as 
 Next we will clear all of these so that the directory only includes the `main.tf` file, and then we will rerun the `terraform init` from within the build image:
 
 ```
-rm -rf ~/example/app/.terraform \
-   ~/example/app/.terraform.lock.hcl \
-   ~/example/app/terraform.tfstate
-
 cd ~/example/
+
+rm -rf ./app/.terraform \
+       ./app/terraform.d \
+       ./app/terraform.tfstate \
+       ./app/.terraform.tfstate.lock.info \
+       ./app/.terraform.lock.hcl
+
 docker run --rm -ti \
   --name "myBuildContainer" \
   --volume $(pwd):/root/src \
   --workdir /root/src \
   "base_buildimage:1.0.0" \
-  terraform -chdir=./app  init
+  terraform -chdir=./app init
 ```
 
 This time the output should look almost identical to the `terraform init` command we performed at the start of this article.
@@ -438,22 +441,23 @@ This can be remedied by changing the version requirements in the `main.tf` file 
 
 ## Completed Milestones
 
-* Demonstrated Simple Terraform example using required providers and its interactions with the `terraform init` command.
+* Demonstrated a Simple Terraform example using required providers and its interactions with the `terraform init` command.
 * Constructed and Demonstrated a basic Docker Build Server Image
 * Ran the `terraform init` command from within the Build Server Image and observed the same results and artifacts.
 
-In the next section, we will cover establishing a local file system mirror that provides a pinned subset of terraform providers you can rely on being consistent and locally available from one build to the next.
+In the next section, we will cover establishing a local file system mirror that provides a pinned subset of terraform providers that are consistent and locally available from one build to the next.
 
 ---
 
 ## Adding a Terraform Provider Mirror 
 
 Terraform has support for several different types of mirrors. There are nuanced differences between the various forms, to avoid going down too many rabbit holes I am going to limit the scope of this article to just a file system-based form using the default file locations and optional terraform configuration files.
-At the heart of this approach is the terraform provider mirror command, and the default Linux file system location for local providers (`/usr/local/share/terraform/plugins`).
 
-I would NOT recommend using the terraform provider mirror command on your local machine using the default directory, as once you set that, it is easy to forget that it is in place and several months later you may pull your hair out trying to figure out why you are not able to gain access to newer provider versions. But in a build image where you are actively pinning all of your resources to specific versions, this is an ideal use case.
+At the heart of this approach is the `terraform provider mirror` command and the default Linux file system location for local providers (`/usr/local/share/terraform/plugins`).
 
-## Define the pinned versions
+I would NOT recommend using the `terraform provider mirror` command on your local machine using the default directory, because it is easy to forget that it is in place and several months later you may pull your hair out trying to figure out why you are not able to gain access to newer provider versions. But in a build image where you are actively pinning all of your resources to specific versions, this is an ideal use case.
+
+## Create provider definition file with versions to be pinned
 
 Create a `setone.tf` file in the `~/example/buildimage` directory with the following contents:
 
@@ -479,17 +483,17 @@ terraform {
 }
 ```
 
-Note we are not using floating version definitions, but rather explicit versions. For example of floating version definition review our earlier file ~/example/app/main.tf, all of the definitions there are floating.
+Note, we are not using floating version definitions, but rather explicit versions declarations. Our initial terraform file, `~/example/app/main.tf` is a good example of floating version definition, all of the definitions there are floating.
 
-If we had used floating version definitions (>=) the version loaded into the image would be the most recent version and could change each time the build image is built.
+If we had used floating version definitions (`>=`) the version loaded into the image would be the most recent version and could change each time the build image is built.
 
-This might be an acceptable approach for your use case, but just be aware of what you are doing. If following this approach I would recommend issuing a new version number for your build image each time it is built as you will likely not be aware of individual provider version changes. This should not be too big of a deal if you are saving your images in a registry as the hash from one build to the next if nothing actually changed will likely be the same.
+This might be an acceptable approach for some use cases, but just be aware of what is being done and why. If using floating version definitions I would recommend issuing a new version number for your build image each time it is built as you will likely not be aware of individual provider version changes. This should not be too big of a deal if you are saving your images in a registry as the hash on the image if nothing actually changed will likely be the same and may not take up extra storage.
 
-If you follow the approach of hard pinning of provider versions you can manually change your build image version when you make a change to the files defining your pinnings ( Dockerfile and setone.tf ).
+In these examples we are hard pinning the provider versions, thus we can manually change build image version when making a change to our definition files (`Dockerfile` and `setone.tf`).
 
 ## Revise the Dockerfile
 
-Next, we need to add some commands to the Dockerfile. To keep track of what we have done so far we are going to make a copy of our current file and make changes to the new file:
+Next, we need to add some commands to the `Dockerfile`. To keep track of what we have done so far we are going to make a copy of our current file and make changes to the new file:
 
 Do the following:
 
@@ -498,7 +502,7 @@ cd ~/example/buildimage
 cp Dockerfile Dockerfile_Mirror
 ```
 
-Using your preferred editor open Dockerfile_Mirror.
+Using your preferred editor open `Dockerfile_Mirror`.
 
 Replace the two lines in the file:
 
@@ -511,6 +515,7 @@ with the following lines:
 
 ```
 RUN mkdir -p /tmp/setone
+
 ADD ./setone.tf /tmp/setone
 
 RUN terraform -chdir=/tmp/setone \
@@ -524,15 +529,17 @@ RUN terraform -chdir=/tmp/setone \
 RUN rm -rf /root/.terraform.d /root/.pki /tmp/setone
 ```
 
-Here is what we are doing and why:
+Here is what we are doing in the about commands:
 * Create a temporary directory we can place our pinned requirements file into.
 * Copy `setone.tf` into the directory.
 * Run `terraform providers mirror` command in the temporary directory
-  * Specify `/usr/local/share/terraform/plugins` as the target directory, which is the default location for local mirror files for Terraform on Linux.
-  * You could include other platforms (currently commented out), if your use case would require them.  But since the build image is based on Linux we are only selecting the Linux platform files.
-* Lastly we clean up unnecesary artifacts that are not needed in the build image.
+  * Specify `/usr/local/share/terraform/plugins` as the target directory, which is the default location for Terraform local mirror files on Linux.
+  * You could include other platforms (currently commented out), if your use case requires them.  Yet, since the build image is based on Linux we are only selecting the Linux platform files.
+* Lastly we clean up unnecessary artifacts that are not needed in the build image.
 
-For more details on mirrors see [Terraform Provider Mirrors]()
+### Terraform documentation on mirrors
+
+* [Terraform Provider Mirrors](https://www.terraform.io/cli/commands/providers/mirror)
 
 ## Mirror Image Build
 
@@ -550,25 +557,109 @@ docker build \
 
 If the command is successful we can now attempt to use our new build image to initialize our example Terraform environment from within the build image.
 
+So as before we need to clear out the terraform state files and other leftovers from the previous run.
+
 Run:
 
 ```
+rm -rf ./app/.terraform \
+       ./app/terraform.d \
+       ./app/terraform.tfstate \
+       ./app/.terraform.tfstate.lock.info \
+       ./app/.terraform.lock.hcl
+```
+
+You will likely get a number of `Permission denied` errors:
+
+```
+rm: cannot remove './app/.terraform/providers/registry.terraform.io/hashicorp/null/3.1.1/linux_amd64/terraform-provider-null_v3.1.1_x5': Permission denied
+rm: cannot remove './app/.terraform/providers/registry.terraform.io/hashicorp/aws/4.22.0/linux_amd64/terraform-provider-aws_v4.22.0_x5': Permission denied
+rm: cannot remove './app/.terraform/providers/registry.terraform.io/hashicorp/external/2.2.2/linux_amd64/terraform-provider-external_v2.2.2_x5': Permission denied
+rm: cannot remove './app/.terraform/providers/registry.terraform.io/hashicorp/cloudinit/2.2.0/linux_amd64/terraform-provider-cloudinit_v2.2.0_x5': Permission denied
+rm: cannot remove './app/.terraform/providers/registry.terraform.io/jfrog/artifactory/6.10.2/linux_amd64/LICENSE': Permission denied
+rm: cannot remove './app/.terraform/providers/registry.terraform.io/jfrog/artifactory/6.10.2/linux_amd64/README.md': Permission denied
+rm: cannot remove './app/.terraform/providers/registry.terraform.io/jfrog/artifactory/6.10.2/linux_amd64/terraform-provider-artifactory_v6.10.2': Permission denied
+rm: cannot remove './app/.terraform/providers/registry.terraform.io/jfrog/artifactory/6.10.2/linux_amd64/CHANGELOG.md': Permission denied
+```
+
+This would be because the previous run of `terraform init` was done from within the docker container, and `root` is the default user when running a container.  Hence when you try to delete these files created by `root` outside of the container you receive this error.
+
+To work around this simply re-run with `sudo`:
+
+```
+sudo rm -rf ./app/.terraform \
+       ./app/terraform.d \
+       ./app/terraform.tfstate \
+       ./app/.terraform.tfstate.lock.info \
+       ./app/.terraform.lock.hcl
+
+```
+
+If you do not have permissions to run `sudo`, you can run the `rm` command from within the container.
+
+Ok, now let us run `terraform init` with a local mirror in place:
+
+```
 cd ~/example/
+
+sudo rm -rf ./app/.terraform \
+       ./app/terraform.d \
+       ./app/terraform.tfstate \
+       ./app/.terraform.tfstate.lock.info \
+       ./app/.terraform.lock.hcl
+
 docker run --rm -ti \
   --name "myBuildContainer" \
   --volume $(pwd):/root/src \
   --workdir /root/src \
   "mirror_buildimage:1.0.0" \
-  terraform -chdir=./app  init
+  terraform -chdir=./app init
 ```
 
-note the version pulled in now
+The results look similar to before, but with some noted differences:
+
+```
+Initializing provider plugins...
+- Finding hashicorp/external versions matching ">= 0.0.0"...
+- Finding hashicorp/null versions matching ">= 0.0.0"...
+- Finding jfrog/artifactory versions matching ">= 0.0.0"...
+- Finding hashicorp/aws versions matching ">= 4.0.0"...
+- Finding hashicorp/cloudinit versions matching ">= 2.0.0"...
+- Installing hashicorp/external v2.1.0...
+- Installed hashicorp/external v2.1.0 (unauthenticated)
+- Installing hashicorp/null v3.1.1...
+- Installed hashicorp/null v3.1.1 (signed by HashiCorp)
+- Installing jfrog/artifactory v6.10.2...
+- Installed jfrog/artifactory v6.10.2 (signed by a HashiCorp partner, key ID 6B219DCCD7639232)
+- Installing hashicorp/aws v4.2.0...
+- Installed hashicorp/aws v4.2.0 (unauthenticated)
+- Installing hashicorp/cloudinit v2.2.0...
+- Installed hashicorp/cloudinit v2.2.0 (unauthenticated)
+```
+
+The `jfrog/artifactory` & `hashicorp/null` are both still signed and are floating to the most recent versions available.  But you will notice the other three, which we defined in out `setone.tf` file are all **unauthenticated** and are now only floating up to the versions we declared within the `setone.tf` file.
+
+
+---
+
+## Completed Milestone
+
+* Successfully pinned Terraform Provider versions within a local mirror on our build image
+
+The above solution works great, but has one negative side effect, you can only declare a single provider version within the mirror.  This is not going to work well if you have different Terraform environments which have different version requirements.  Making unique build images for each set of versions is one solution, but not very practical. Populating multiple mirrors on your build image with different version is another approach, but could end up with redundant storage footprints.
+
+In the next section we will introduce how to have multiple provider versions within the same mirror.
 
 ---
 
 ## Multiple versions
 
-The above is all well and good if everyone using your build image can live with just the single version of each provider, but what do you do when you want to test or use a different version of a provider for some of the environments you are building with this build image?
+The above is all well and good if everyone using your build image can live with just the single version of each provider, but what do you do when you want to test or use a different version of a provider for some of the environments you are building with this build image?  Or god forbid you have multiple Terraform environments you want to build and they have differing requirements
+
+
+
+A better non-obvious approach is to have multiple requirement files and run multiple `terraform providers mirror` commands pointing to the same mirror target directory.  The `terraform providers mirror` handles merging existing and newly declared version into a consolidated list within the mirror.
+
 
 The terraform provider mirror command will give yiou an error if you attempt to list the same provider twice.
 

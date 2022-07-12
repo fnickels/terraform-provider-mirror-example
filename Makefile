@@ -21,7 +21,7 @@ destroy:
 
 init:
 	-rm -rf ./app/terraform.d ./app/.terraform ./app/.terraform.lock.hcl ./app/.terraform.tfstate.lock.info ./app/terraform.tfstate
-	terraform -chdir=./app  init
+	terraform -chdir=./app init
 
 
 #################
@@ -57,8 +57,8 @@ base_run: force-stop base_buildimage
 		--workdir /root/src \
 		"$(BUILD_IMAGE_NAME_BASE)" \
 		bash
-		
-base_init: force-stop 
+
+base_init: force-stop
 	docker run --rm -ti \
 		--name "$(BUILD_CONTAINER_NAME)" \
 		--volume $$(pwd):/root/src \
@@ -85,7 +85,7 @@ mirror_run: force-stop mirror_buildimage
 		"$(BUILD_IMAGE_NAME_MIRROR)" \
 		bash
 
-mirror_init: force-stop 
+mirror_init: force-stop
 	docker run --rm -ti \
 		--name "$(BUILD_CONTAINER_NAME)" \
 		--volume $$(pwd):/root/src \
@@ -112,7 +112,7 @@ multiver_run: force-stop multiver_buildimage
 		"$(BUILD_IMAGE_NAME_MULTIVER)" \
 		bash
 
-multiver_init: force-stop 
+multiver_init: force-stop
 	docker run --rm -ti \
 		--name "$(BUILD_CONTAINER_NAME)" \
 		--volume $$(pwd):/root/src \
@@ -139,7 +139,7 @@ multiver_config_run: force-stop multiver_config_buildimage
 		"$(BUILD_IMAGE_NAME_MULTIVER_CONFIG)" \
 		bash
 
-multiver_config_init: force-stop 
+multiver_config_init: force-stop
 	docker run --rm -ti \
 		--name "$(BUILD_CONTAINER_NAME)" \
 		--volume $$(pwd):/root/src \
@@ -166,7 +166,7 @@ multiver_nodirect_run: force-stop multiver_nodirect_buildimage
 		"$(BUILD_IMAGE_NAME_MULTIVER_NODIRECT)" \
 		bash
 
-multiver_nodirect_init: force-stop 
+multiver_nodirect_init: force-stop
 	@echo "This configuration is expected to generate an error, which is ignored"
 	-docker run --rm -ti \
 		--name "$(BUILD_CONTAINER_NAME)" \
@@ -175,7 +175,7 @@ multiver_nodirect_init: force-stop
 		"$(BUILD_IMAGE_NAME_MULTIVER_NODIRECT)" \
 		make init
 
-.PHONY: force-stop 
+.PHONY: force-stop
 
 force-stop:
 	@echo "Attempting to stop running local container, if not shutdown properly."
