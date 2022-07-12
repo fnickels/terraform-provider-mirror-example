@@ -1,8 +1,10 @@
 # Setting up a Docker Build Server Image with support for a local Terraform Provider Mirror containing multiple provider versions
 
+by Francis Nickels - Summer 2022
+
 The pattern of using a Docker image with specific versions of the tools and dependencies preloaded into the image is not new or novel. Yet, when looking for steps to apply this pattern to Terraform Provider Versions, examples and documentation covering this are a bit challenging to find and piece together. Specifically, if you are looking to support multiple build targets that may have differing provider version requirements.
 
-In this post, I will cover the basic setup of the build image and then introduce one approach for capturing and preloading the terraform provider versions into a local mirror within the build image.
+In this post, I will cover the basic setup of the build image and then introduce one approach for capturing and preloading the Terraform provider versions into a local mirror within the build image.
 
 The benefits of a Build Server Image with pinned, preloaded dependency versions are:
 
@@ -38,7 +40,7 @@ terraform --version
 docker --version
 ```
 
-It is ok if the version of Terraform installed on your machine is different from the version we will be installing in the build image. This is one of the benefits of using a build image to ensure consistency across multiple machines and developers.
+It is ok if the version of Terraform installed on your machine is different from the version we will be installing in the build image. This is one of the benefits of using a build image to ensure consistency across multiple machines and developers.  *(I am using Terraform v1.1.9 and Docker version 20.10.12)*
 
 * [Docker install instructions](https://docs.docker.com/get-docker/)
 * [Terraform install instructions](https://www.terraform.io/downloads)
@@ -791,7 +793,23 @@ In the next section we will explore how to use Terraform configuration files to 
 
 ---
 
-## Moidify Mirror behaviour with Terraform config file
+## Modify Mirror behavior with Terraform configuration files
 
-[Terraform Config](https://www.terraform.io/cli/config/config-file) files can be used to modify how a local mirror behaves.  A `.terraformrc` file located in the users home directory (on Linux systems), can contain configuration settings that alter the behavior of a local mirror.
+[Terraform Configuration](https://www.terraform.io/cli/config/config-file) files can be used to modify how a local mirror behaves.  A `.terraformrc` file located in the users home directory (on Linux systems), can contain configuration settings that alter the behavior of a local mirror.
 
+The
+
+
+---
+
+## Footnotes:
+
+* [Terraform Version Constraints](https://www.terraform.io/language/expressions/version-constraints)
+* [Terraform Provider Requirements](https://www.terraform.io/language/providers/requirements)
+
+* [Terraform Provider Mirrors](https://www.terraform.io/cli/commands/providers/mirror)
+* [Terraform Configuration Files](https://www.terraform.io/cli/config/config-file)
+  * includes details on different mirror Types
+
+* [Docker install instructions](https://docs.docker.com/get-docker/)
+* [Terraform install instructions](https://www.terraform.io/downloads)
