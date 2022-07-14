@@ -230,6 +230,7 @@ RUN yum -y install \
       curl \
       git \
       make \
+      tree \
       unzip \
    && yum -y clean all \
    && rm -rf /var/cache
@@ -273,7 +274,7 @@ ENV BUILD_IMAGE_VERSION ${BUILD_IMAGE_VERSION}
 LABEL build.image.version=${BUILD_IMAGE_VERSION}
 ```
 
-The above image preloads `git`, `make`, `unzip`, and `curl`. As well as pinned versions of `terraform` and the `aws` cli. You can add whatever tools you like for your build environment requirements.
+The above image preloads `git`, `make`, `unzip`, `tree`, and `curl`. As well as pinned versions of `terraform` and the `aws` cli. You can add whatever tools you like for your build environment requirements.
 
 The `Dockerfile` expects one passed-in build argument, `BUILD_IMAGE_VERSION`, this is the version number you can assign to the build image. The value is exposed as both a label on the docker image and an environment variable within the container.
 
@@ -797,8 +798,155 @@ In the next section we will explore how to use Terraform configuration files to 
 
 [Terraform Configuration](https://www.terraform.io/cli/config/config-file) files can be used to modify how a local mirror behaves.  A `.terraformrc` file located in the users home directory (on Linux systems), can contain configuration settings that alter the behavior of a local mirror.
 
-The
+Up until this point we have been working with an `Implied Local Mirror Directories` setting, meaning we have been relying upon the default behaviors.  The Terraform Configuration documentation has a [section](https://www.terraform.io/cli/config/config-file#implied-local-mirror-directories) covering this.
 
+For this section we will be working with an [Explicit Installation Method Configuration](https://www.terraform.io/cli/config/config-file#explicit-installation-method-configuration) where the configuration block for providers takes the form of:
+
+```
+provider_installation {
+  filesystem_mirror {
+    path    = "/usr/share/terraform/providers"
+    include = ["example.com/*/*"]
+  }
+  direct {
+    exclude = ["example.com/*/*"]
+  }
+}
+```
+
+Carefully read the [Provider Installation](https://www.terraform.io/cli/config/config-file#provider-installation) section of the documentation as there are a number of key nuances to be aware of.  We will be covering what is needed for setting up a single local filesystem mirror.
+
+There is a section covering `Provider Plugin Cache`, note that a plugin cache, while similar, is different than a mirror.  These are copies of the provider versions that have been called into play with a `terraform init` command and the directory structure and file layout are not the same.  The `terraform init` command store provider files in the `Unpacked layout` format described in the documentation, and the `terraform provider mirror` command saves the files in the `Packer layout`.
+
+There are three types of provider mirror installations supported:
+* `direct`,
+* `filesystem_mirror`, and
+* `network_mirror`
+
+The `direct` is for specifying what is to be retrieved from the public mirrors on the Internet.  If you exclude this entry no attempts will be made to pull in provider versions from the Internet.
+
+The `filesystem_mirror` specifies where local mirrors exist on the host and can be specified multiple times with different paths.  *(I have not investigated how this works with multiple entries nor how the ordering of the entries behaves if you have the same provider in multiple mirrors with different versions.  Hence I have stuck to a simple config with a single mirror.)*
+
+The `path` element for the `filesystem_mirror` can be used to specify an alternate location for the local mirror, but we will leave it set to the Linux default location (`/usr/local/share/terraform/plugins`) in our setup.
+
+The `network_mirror` setup is out of scope for this article.
+
+The installation types each can have `include` and `exclude` patterns to specify which providers are to be used from where
+
+
+## First example configuration file
+
+For our initial test of a configuration create a `terraformrc_test1` file in the `~/example/buildimage` directory with the following contents:
+
+```
+# See: https://www.terraform.io/cli/config/config-file
+
+provider_installation {
+  filesystem_mirror {
+    path    = "/usr/local/share/terraform/plugins"
+    include = [
+      "registry.terraform.io/hashicorp/aws",
+      "registry.terraform.io/hashicorp/cloudinit",
+      "registry.terraform.io/hashicorp/external",
+    ]
+  }
+  direct {
+    exclude = [
+      "registry.terraform.io/hashicorp/aws",
+      "registry.terraform.io/hashicorp/cloudinit",
+      "registry.terraform.io/hashicorp/external",
+    ]
+  }
+}
+```
+
+## Make another Dockerfile
+
+Next, we need to add additional commands to the Dockerfile. We will copy the last Dockerfile into another new file.
+
+Do the following:
+
+```
+cd ~/example/buildimage
+cp Dockerfile_MultiVer Dockerfile_MultiVer_Test1
+```
+
+Using your preferred editor open `Dockerfile_Config_Test1`.
+
+Replace the two lines in the file:
+
+```
+## Clean up excess files
+RUN rm -rf /root/.terraform.d /root/.pki /tmp/setone /tmp/settwo
+```
+
+with the following lines:
+
+```
+## Clean up excess files
+RUN rm -rf /root/.terraform.d /root/.pki /tmp/setone /tmp/settwo
+
+ADD ./terraformrc_test1 /root/.terraformrc
+
+```
+
+## Config Test 1 Image Build
+
+Run the following command from a shell:
+
+```
+cd ~/example/buildimage
+docker build \
+   --progress plain \
+   --tag "config_test1_buildimage:1.0.0" \
+   --tag "config_test1_buildimage:latest" \
+   --build-arg BUILD_IMAGE_VERSION="1.0.0" \
+   --file ./Dockerfile_Config_Test1 .
+```
+
+If the command is successful we can now attempt to use our new build image to initialize our example Terraform environment from within the build image.
+
+Run:
+
+```
+cd ~/example/
+
+sudo rm -rf ./app/.terraform \
+       ./app/terraform.d \
+       ./app/terraform.tfstate \
+       ./app/.terraform.tfstate.lock.info \
+       ./app/.terraform.lock.hcl
+
+docker run --rm -ti \
+  --name "myBuildContainer" \
+  --volume $(pwd):/root/src \
+  --workdir /root/src \
+  "config_test1_buildimage:1.0.0" \
+  terraform -chdir=./app init
+```
+
+And again we get different results:
+
+```
+Initializing provider plugins...
+- Finding hashicorp/null versions matching ">= 0.0.0"...
+- Finding jfrog/artifactory versions matching ">= 0.0.0"...
+- Finding hashicorp/aws versions matching ">= 4.0.0"...
+- Finding hashicorp/cloudinit versions matching ">= 2.0.0"...
+- Finding hashicorp/external versions matching ">= 0.0.0"...
+- Installing hashicorp/null v3.1.1...
+- Installed hashicorp/null v3.1.1 (signed by HashiCorp)
+- Installing jfrog/artifactory v6.11.0...
+- Installed jfrog/artifactory v6.11.0 (signed by a HashiCorp partner, key ID 6B219DCCD7639232)
+- Installing hashicorp/aws v4.10.0...
+- Installed hashicorp/aws v4.10.0 (unauthenticated)
+- Installing hashicorp/cloudinit v2.2.0...
+- Installed hashicorp/cloudinit v2.2.0 (unauthenticated)
+- Installing hashicorp/external v2.1.0...
+- Installed hashicorp/external v2.1.0 (unauthenticated)
+```
+
+So even though `hashicorp/null` is in the local mirror, the new configuration file only allows the other three
 
 ---
 
@@ -810,6 +958,8 @@ The
 * [Terraform Provider Mirrors](https://www.terraform.io/cli/commands/providers/mirror)
 * [Terraform Configuration Files](https://www.terraform.io/cli/config/config-file)
   * includes details on different mirror Types
+  * [Explicit Installation Method Configuration](https://www.terraform.io/cli/config/config-file#explicit-installation-method-configuration)
+  * [Implied Local Mirror Directories](https://www.terraform.io/cli/config/config-file#implied-local-mirror-directories)
 
 * [Docker install instructions](https://docs.docker.com/get-docker/)
 * [Terraform install instructions](https://www.terraform.io/downloads)
