@@ -31,3 +31,5 @@ override.tf.json
 secrets.env
 secrets2.env
 .vscode
+.terraform.lock.hcl
+

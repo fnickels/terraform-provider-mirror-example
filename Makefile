@@ -10,6 +10,8 @@ testall: base_init mirror_init multiver_init multiver_config_init multiver_nodir
 ## Sample App ##
 ################
 
+.PHONY: plan apply destroy init
+
 plan:
 	terraform -chdir=./app  plan
 
@@ -23,6 +25,20 @@ init:
 	-rm -rf ./app/terraform.d ./app/.terraform ./app/.terraform.lock.hcl ./app/.terraform.tfstate.lock.info ./app/terraform.tfstate
 	terraform -chdir=./app init
 
+.PHONY: plan2 apply2 destroy2 init2
+
+plan2:
+	terraform -chdir=./app2  plan
+
+apply2:
+	terraform -chdir=./app2  apply -auto-approve
+
+destroy2:
+	terraform -chdir=./app2  destroy -auto-approve
+
+init2:
+	-rm -rf ./app2/terraform.d ./app2/.terraform ./app2/.terraform.lock.hcl ./app2/.terraform.tfstate.lock.info ./app2/terraform.tfstate
+	terraform -chdir=./app2 init
 
 #################
 ## Build Image ##
@@ -119,6 +135,12 @@ multiver_init: force-stop
 		--workdir /root/src \
 		"$(BUILD_IMAGE_NAME_MULTIVER)" \
 		make init
+	docker run --rm -ti \
+		--name "$(BUILD_CONTAINER_NAME)" \
+		--volume $$(pwd):/root/src \
+		--workdir /root/src \
+		"$(BUILD_IMAGE_NAME_MULTIVER)" \
+		make init2
 
 .PHONY: multiver_config_buildimage multiver_config_run multiver_config_init
 
@@ -146,6 +168,12 @@ multiver_config_init: force-stop
 		--workdir /root/src \
 		"$(BUILD_IMAGE_NAME_MULTIVER_CONFIG)" \
 		make init
+	docker run --rm -ti \
+		--name "$(BUILD_CONTAINER_NAME)" \
+		--volume $$(pwd):/root/src \
+		--workdir /root/src \
+		"$(BUILD_IMAGE_NAME_MULTIVER_CONFIG)" \
+		make init2
 
 .PHONY: multiver_nodirect_buildimage multiver_nodirect_run multiver_nodirect_init
 
